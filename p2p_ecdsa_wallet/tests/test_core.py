@@ -91,6 +91,99 @@ class BlockchainTest(unittest.TestCase):
         other.replace_chain([Block.from_dict(b.to_dict()) for b in self.bc.chain])
         self.assertEqual(other.mempool, [])
 
+    def _copy(self, chain):
+        return [Block.from_dict(b.to_dict()) for b in chain]
+
+    def test_nonce_must_be_sequential(self):
+        self.bc.mine_pending_transactions(self.alice.public_key_hex)
+        bob = self.bob.public_key_hex
+        self.assertEqual(self.bc.get_next_nonce(self.alice.public_key_hex), 0)
+
+        ok, reason = self.bc.try_add_transaction(self._signed_tx(self.alice, bob, 1, nonce=1))
+        self.assertFalse(ok)
+        self.assertIn("nonce", reason)
+
+        self.assertTrue(self.bc.add_transaction(self._signed_tx(self.alice, bob, 1, nonce=0)))
+        self.assertTrue(self.bc.add_transaction(self._signed_tx(self.alice, bob, 1, nonce=1)))
+        self.assertEqual(self.bc.get_next_nonce(self.alice.public_key_hex), 2)
+        self.bc.mine_pending_transactions(bob)
+        self.assertEqual(self.bc.get_next_nonce(self.alice.public_key_hex), 2)
+
+        # Ký lại giao dịch cũ với nonce đã dùng -> bị từ chối dù chữ ký hợp lệ
+        ok, reason = self.bc.try_add_transaction(self._signed_tx(self.alice, bob, 1, nonce=0))
+        self.assertFalse(ok)
+        self.assertIn("nonce", reason)
+
+    def test_rejection_reasons(self):
+        bob = self.bob.public_key_hex
+        ok, reason = self.bc.try_add_transaction(self._signed_tx(self.alice, bob, 1))
+        self.assertFalse(ok)
+        self.assertIn("số dư", reason)
+
+        self.bc.mine_pending_transactions(self.alice.public_key_hex)
+        tx = self._signed_tx(self.alice, bob, 5)
+        forged = Transaction.from_dict({**tx.to_dict(), "recipient": bob[:-1] + ("1" if bob[-1] == "0" else "0")})
+        ok, reason = self.bc.try_add_transaction(forged)
+        self.assertFalse(ok)
+        self.assertIn("ECDSA", reason)
+
+        nan_tx = Transaction.from_dict({**tx.to_dict(), "amount": float("nan")})
+        self.assertFalse(self.bc.add_transaction(nan_tx))
+
+    def test_validate_chain_reports_reason(self):
+        self.bc.mine_pending_transactions(self.alice.public_key_hex)
+        self.assertIsNone(self.bc.validate_chain(self.bc.chain))
+
+        broken = self._copy(self.bc.chain)
+        broken[1].previous_hash = "abc"
+        self.assertIn("previous_hash", self.bc.validate_chain(broken))
+
+        unmined = self._copy(self.bc.chain)
+        unmined[1].nonce += 1
+        unmined[1].hash = unmined[1].calculate_hash()
+        if not unmined[1].hash.startswith("00"):
+            self.assertIn("Proof of Work", self.bc.validate_chain(unmined))
+
+    def test_try_add_block(self):
+        from core.blockchain import BLOCK_ACCEPTED, BLOCK_NEED_SYNC, BLOCK_REJECTED, BLOCK_STALE
+
+        miner = Blockchain(os.path.join(self.tmp, "miner.json"), difficulty=2)
+        b1 = miner.mine_pending_transactions(self.alice.public_key_hex)
+        b2 = miner.mine_pending_transactions(self.alice.public_key_hex)
+
+        # Thiếu khối 1 -> cần đồng bộ
+        self.assertEqual(self.bc.try_add_block(Block.from_dict(b2.to_dict()))[0], BLOCK_NEED_SYNC)
+        self.assertEqual(self.bc.try_add_block(Block.from_dict(b1.to_dict()))[0], BLOCK_ACCEPTED)
+        self.assertEqual(self.bc.try_add_block(Block.from_dict(b1.to_dict()))[0], BLOCK_STALE)
+
+        tampered = Block.from_dict(b2.to_dict())
+        tampered.transactions[0].amount = 1000  # sửa thưởng mà không đào lại
+        status, reason = self.bc.try_add_block(tampered)
+        self.assertEqual(status, BLOCK_REJECTED)
+        self.assertIn("hash", reason)
+
+        self.assertEqual(self.bc.try_add_block(Block.from_dict(b2.to_dict()))[0], BLOCK_ACCEPTED)
+        self.assertEqual(len(self.bc.chain), 3)
+
+    def test_fork_returns_orphaned_transactions_to_mempool(self):
+        bob = self.bob.public_key_hex
+        self.bc.mine_pending_transactions(self.alice.public_key_hex)
+        shared = self._copy(self.bc.chain)
+
+        # Node A đóng gói giao dịch vào khối 2 (nhánh ngắn)
+        tx = self._signed_tx(self.alice, bob, 5)
+        self.assertTrue(self.bc.add_transaction(tx))
+        self.bc.mine_pending_transactions(self.alice.public_key_hex)
+
+        # Node B đào nhánh dài hơn mà không có giao dịch đó
+        other = Blockchain(os.path.join(self.tmp, "other.json"), difficulty=2)
+        other.replace_chain(shared)
+        other.mine_pending_transactions(bob)
+        other.mine_pending_transactions(bob)
+
+        self.bc.replace_chain(self._copy(other.chain))
+        self.assertEqual([t.calculate_hash() for t in self.bc.mempool], [tx.calculate_hash()])
+
 
 if __name__ == "__main__":
     unittest.main()

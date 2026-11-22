@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ví Full Node P2P</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Ví Full Node P2P <span id="node-port" class="port"></span></h1>
+      <p class="subtitle">Chữ ký số ECDSA secp256k1 · SHA-256 · Proof of Work · Longest Chain Rule</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-label">Độ dài chuỗi</span><span id="stat-length" class="stat-value">–</span></div>
+      <div class="stat"><span class="stat-label">Mempool</span><span id="stat-mempool" class="stat-value">–</span></div>
+      <div class="stat"><span class="stat-label">Độ khó PoW</span><span id="stat-difficulty" class="stat-value">–</span></div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Ví của node -->
+    <section class="card">
+      <h2>Ví của node</h2>
+      <div class="balance"><span id="wallet-balance">–</span> <small>coin</small></div>
+      <label class="field-label">Địa chỉ ví (Public Key hex)</label>
+      <div class="address-row">
+        <code id="wallet-address" class="address">–</code>
+        <button id="btn-copy" class="btn btn-ghost" type="button">Sao chép</button>
+      </div>
+      <p class="muted">Nonce giao dịch kế tiếp: <strong id="wallet-nonce">–</strong></p>
+      <div class="actions">
+        <button id="btn-mine" class="btn btn-primary" type="button">Đào khối</button>
+        <button id="btn-sync" class="btn" type="button">Đồng bộ ngay</button>
+      </div>
+      <div id="action-result" class="result" hidden></div>
+    </section>
+
+    <!-- Mạng ngang hàng -->
+    <section class="card">
+      <h2>Mạng ngang hàng</h2>
+      <ul id="peer-list" class="peer-list"><li class="muted">Đang tải…</li></ul>
+      <form id="form-register" class="inline-form">
+        <input id="register-url" type="text" placeholder="http://127.0.0.1:5004" autocomplete="off">
+        <button class="btn" type="submit">Thêm peer</button>
+      </form>
+    </section>
+
+    <!-- Chuyển tiền -->
+    <section class="card">
+      <h2>Chuyển tiền</h2>
+      <form id="form-send">
+        <label class="field-label" for="send-recipient-select">Người nhận</label>
+        <select id="send-recipient-select" class="recipient-select"></select>
+        <input id="send-recipient" type="text" placeholder="…hoặc dán địa chỉ ví người nhận" autocomplete="off">
+        <label class="field-label" for="send-amount">Số tiền</label>
+        <input id="send-amount" type="number" min="0" step="any" value="10" required>
+        <button class="btn btn-primary" type="submit">Ký &amp; gửi giao dịch</button>
+      </form>
+      <div id="send-result" class="result" hidden></div>
+    </section>
+
+    <!-- Kiểm thử giả mạo -->
+    <section class="card card-wide">
+      <h2>Kiểm thử giả mạo giao dịch <span class="tag">Đề K</span></h2>
+      <p class="muted">
+        Bước 1: ký một giao dịch bằng Private Key của node (chưa gửi đi).
+        Bước 2: sửa dữ liệu sau khi ký. Bước 3: gửi cho node xác minh. Chữ ký không còn khớp nên giao dịch bị từ chối.
+      </p>
+      <form id="form-sign" class="inline-form">
+        <select id="tamper-recipient-select" class="recipient-select"></select>
+        <input id="tamper-amount" type="number" min="0" step="any" value="5" required>
+        <button class="btn btn-primary" type="submit">1. Ký giao dịch</button>
+      </form>
+      <textarea id="tamper-json" rows="9" spellcheck="false" placeholder="JSON giao dịch đã ký sẽ hiện ở đây, có thể sửa trực tiếp"></textarea>
+      <div class="actions">
+        <button id="btn-tamper-amount" class="btn" type="button">2a. Sửa số tiền +1</button>
+        <button id="btn-tamper-recipient" class="btn" type="button">2b. Sửa 1 ký tự người nhận</button>
+        <button id="btn-tamper-reset" class="btn btn-ghost" type="button">Khôi phục bản gốc</button>
+        <button id="btn-tamper-send" class="btn btn-danger" type="button">3. Gửi tới node để xác minh</button>
+      </div>
+      <div id="tamper-result" class="result" hidden></div>
+    </section>
+
+    <!-- Nhật ký node -->
+    <section class="card card-wide">
+      <h2>Nhật ký node</h2>
+      <ol id="log-list" class="log-list"></ol>
+    </section>
+
+    <!-- Mempool -->
+    <section class="card card-wide">
+      <h2>Mempool (giao dịch chờ đào)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Từ</th><th>Đến</th><th>Số tiền</th><th>Nonce</th><th>Chữ ký</th></tr></thead>
+          <tbody id="mempool-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Chuỗi khối -->
+    <section class="card card-wide">
+      <h2>Chuỗi khối (sổ cái cục bộ)</h2>
+      <div id="chain-list" class="chain-list"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

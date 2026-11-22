@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import time
 
 from core.wallet import Wallet
@@ -46,7 +47,9 @@ class Transaction:
 
     def is_valid(self) -> bool:
         """Kiểm tra tính toàn vẹn và xác minh chữ ký số ECDSA."""
-        if self.amount <= 0:
+        if not math.isfinite(self.amount) or self.amount <= 0:  # chặn cả NaN / vô cực
+            return False
+        if not isinstance(self.recipient, str) or not self.recipient:
             return False
         if self.sender == SYSTEM_SENDER:  # Giao dịch thưởng đào khối (Coinbase)
             return True

@@ -1,0 +1,10 @@
+# Bytecode Python tự sinh
+__pycache__/
+*.py[cod]
+
+# Dữ liệu chạy của node: sổ cái + ví (chứa PRIVATE KEY) — không commit
+p2p_ecdsa_wallet/storage/*
+!p2p_ecdsa_wallet/storage/.gitkeep
+
+# Log khi chạy thử
+*.log
